@@ -38,8 +38,8 @@ class WrappedProperty:
             to_wrap = raw[self.key]
         except KeyError:
             return self.default
-        if isinstance(self.wrapper, Wrapper):
-            return self.wrapper(to_wrap)
+        if isinstance(self.wrapper, type) and issubclass(self.wrapper, Wrapper):
+            return self.wrapper(instance.pdf, to_wrap)
         else:
             return self.wrapper(to_wrap)
     def __set__(self, instance:Wrapper, value):

@@ -23,10 +23,13 @@ class InputType(Enum):
 
 
 class FieldFlags(IntFlag):
-    def __init__(self, value):
-        if isinstance(value, str) and value.isdigit():
+    @classmethod
+    def lookup(cls, value):
+        if value is None:
+            value = 0
+        elif isinstance(value, str) and value.isdigit():
             value = int(value)
-        super().__init__(value)
+        return cls(value)
     # Note: spec numbers bits starting with 1, so indexes below are off-by-one
     # Table 221 – Field flags common to all field types
     ReadOnly = 1 << 0
@@ -56,7 +59,7 @@ class FieldFlags(IntFlag):
 class Field(Wrapper):
     raw:PdfDict
     rect = WrappedProperty(PdfName('Rect'), Rect)
-    field_flags = WrappedProperty(PdfName('Ff'), FieldFlags, 0, True)
+    field_flags = WrappedProperty(PdfName('Ff'), FieldFlags.lookup, 0, True)
     @property
     def qualified_name(self) -> Optional[str]:
         """
@@ -178,9 +181,9 @@ class Field(Wrapper):
         # Now build the appearance stream for the entered text
         xobject = layout_form_text(self.pdf, value, da, self.rect)
         if '/AP' not in self.raw:
-            self.raw.update(PdfDict(AP = PdfDict(N = xobject)))
+            self.raw.update(PdfDict(AP = PdfDict(N = xobject.raw)))
         else:
-            self.raw.AP.update(PdfDict(N = xobject))
+            self.raw.AP.update(PdfDict(N = xobject.raw))
 
 
 # TODO can we generalize this function more into a generic text layout function?
@@ -245,8 +248,8 @@ def layout_form_text(pdf, text:str, da:str, rect:Rect, padding=1, line_spacing=1
         stream.paint_text(PdfString.from_unicode(line))
     (stream
         .end_text()
-        .restore_stack()
+        .pop_stack()
         .end_marked_content()
     )
     # Set the stream on the form XObject
-    return FormXObject.new(bbox, stream, resources)
+    return FormXObject.new(pdf, bbox, stream, resources)

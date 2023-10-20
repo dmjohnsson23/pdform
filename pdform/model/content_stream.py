@@ -2,12 +2,12 @@ from __future__ import annotations
 from typing import Union,List,Tuple
 from pdfrw import PdfArray,PdfDict,PdfName,PdfString
 from pdfrw.objects.pdfname import BasePdfName
-from enum import StrEnum,IntEnum
+from enum import Enum,IntEnum
 from dataclasses import dataclass
 import re
 from .rect import Rect
 
-class Operator(StrEnum):
+class Operator(str, Enum): # We can just use StrEnum in Python 3.11
     # General graphics state (Table 57)
     set_line_width='w'
     set_line_cap='J'
@@ -19,7 +19,7 @@ class Operator(StrEnum):
     use_dict_params='gs'
     # Special graphics state (Table 57)
     push_stack='q'
-    restore_stack='Q'
+    pop_stack='Q'
     set_transform_matrix='cm',
     # Path construction (Table 59)
     move='m',
@@ -99,6 +99,9 @@ class Operator(StrEnum):
 
     def __call__(self, *operands):
         return Operation(self, operands)
+    
+    def __str__(self):
+        return self.value
 
 class TextRenderMode(IntEnum):
     # See 9.3.6 "Text Rendering Mode"
@@ -121,7 +124,8 @@ class Operation:
         if not self.operands:
             return str(self.operator)
         else:
-            return f"{' '.join(self.operands)} {self.operator}"
+            # TODO properly convert PdfArray and PdfDict to string
+            return f"{' '.join(map(str, self.operands))} {self.operator}"
 
 class ContentStream:
     """
@@ -137,9 +141,11 @@ class ContentStream:
     * 8.4: Graphics State
     * 8.5: Path Construction and Painting
     """
-   # Basically the same concept: https://doc.courtbouillon.org/pydyf/stable/api_reference.html#pydyf.Stream 
-   # See also: https://github.com/Kozea/WeasyPrint/blob/main/weasyprint/pdf/stream.py
-    _operations = []
+    # Basically the same concept: https://doc.courtbouillon.org/pydyf/stable/api_reference.html#pydyf.Stream 
+    # See also: https://github.com/Kozea/WeasyPrint/blob/main/weasyprint/pdf/stream.py
+    def __init__(self, operations:List[Operation]=None):
+        self._operations = operations or []
+
     def operation(self, operator:str, *operands:Union[PdfArray,PdfDict,PdfName,PdfString,int,float]):
         # Table 51 (under 8.2) lists possible operations
         self._operations.append((operator, operands))
@@ -157,7 +163,7 @@ class ContentStream:
         return self
     
     def __str__(self):
-        return ' '.join(self._operations)
+        return ' '.join(map(str, self._operations))
     # TODO PdfTokens could be used to split the string when parsing
 
     def set_line_width(self, width):
@@ -231,12 +237,12 @@ class ContentStream:
         self._operations.append(Operator.push_stack())
         return self
     
-    def restore_stack(self):
+    def pop_stack(self):
         """
         Restore the graphics state by removing the most recently saved state from the stack and 
         making it the current state (see 8.4.2, "Graphics State Stack").
         """
-        self._operations.append(Operator.restore_stack())
+        self._operations.append(Operator.pop_stack())
         return self
     
     def set_transform_matrix(self, a, b, c, d, e, f):

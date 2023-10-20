@@ -4,7 +4,7 @@ from ..model.form_field import Field, InputType
 from ..model.rect import Rect
 from .stamp import stamp
 
-def iter_fields(annots:Sequence[PdfDict]):
+def iter_fields(pdf, annots:Sequence[PdfDict]):
     """
     Iterator over a set of fields. For radio buttons, yield the parent. For all others, yield the leaf node.
 
@@ -21,7 +21,7 @@ def iter_fields(annots:Sequence[PdfDict]):
             if '/Kids' in annot:
                 yield from iter_fields(annot.Kids)
             continue
-        field = Field(annot)
+        field = Field(pdf, annot)
         input_type = field.input_type
         if input_type is InputType.radio:
             if '/Kids' in annot:
@@ -60,8 +60,8 @@ def fill_form(pdf, data:dict):
         if annotations is None:
             continue
         to_delete = []
-        for index, annotation in enumerate(iter_fields(annotations)):
-            field = Field(annotation)
+        for index, annotation in enumerate(iter_fields(pdf, annotations)):
+            field = Field(pdf, annotation)
             key = field.qualified_name
             if key and key in data and data[key] is not None:
                 if annotation.inheritable.FT == '/Sig':
