@@ -1,13 +1,23 @@
 from __future__ import annotations
-from typing import Union,List,Tuple
+from typing import Union,List
 from pdfrw import PdfArray,PdfDict,PdfName,PdfString
 from pdfrw.objects.pdfname import BasePdfName
 from enum import Enum,IntEnum
 from dataclasses import dataclass
-import re
-from .rect import Rect
+
 
 class Operator(str, Enum): # We can just use StrEnum in Python 3.11
+    """
+    Enumeration of all possible graphics operations used in PDF content streams. See 8.2 and 9.4.
+
+    Operators are callable, and doing so will return an operation. Thus, all the following are 
+    equivalent::
+
+        Operation(Operator.move, x, y)
+        Operator.move(x, y)
+        Operator('m')(x, y)
+        Operation(Operator('m'), x, y)
+    """
     # General graphics state (Table 57)
     set_line_width='w'
     set_line_cap='J'
@@ -104,7 +114,9 @@ class Operator(str, Enum): # We can just use StrEnum in Python 3.11
         return self.value
 
 class TextRenderMode(IntEnum):
-    # See 9.3.6 "Text Rendering Mode"
+    """
+    See 9.3.6 "Text Rendering Mode"
+    """
     fill=0
     stroke=1
     fill_and_stroke=2
@@ -117,6 +129,9 @@ class TextRenderMode(IntEnum):
 
 @dataclass
 class Operation:
+    """
+    Represents a operation in a PDF content stream. See 8.2 and 9.4.
+    """
     operator:Operator
     operands:List[Union[PdfArray,PdfDict,PdfName,PdfString,int,float]]
 
@@ -140,25 +155,46 @@ class ContentStream:
     * 8.2: Graphics Objects
     * 8.4: Graphics State
     * 8.5: Path Construction and Painting
+
+    There are numerous shortcut methods for appending various operations to the stream. All the 
+    following lines are equivalent::
+
+        stream.operation(Operator.move, x, y)
+        stream.operation(Operator('m'), x, y)
+        stream.operation('m', x, y)
+        stream.append(Operator.move(x, y))
+        stream.append(Operator('m')(x, y))
+        stream.append(Operation(Operator.move, x, y))
+        stream.append(Operation(Operator('m'), x, y))
+        stream.append_raw(f"{x} {y} m")
+        stream.move(x, y)
     """
     # Basically the same concept: https://doc.courtbouillon.org/pydyf/stable/api_reference.html#pydyf.Stream 
     # See also: https://github.com/Kozea/WeasyPrint/blob/main/weasyprint/pdf/stream.py
     def __init__(self, operations:List[Operation]=None):
         self._operations = operations or []
 
-    def operation(self, operator:str, *operands:Union[PdfArray,PdfDict,PdfName,PdfString,int,float]):
+    def operation(self, operator:Union[str,Operator], *operands:Union[PdfArray,PdfDict,PdfName,PdfString,int,float]):
         # Table 51 (under 8.2) lists possible operations
-        self._operations.append((operator, operands))
+        self._operations.append(Operator(operator)(operands))
         return self
     
     def extend(self, other:ContentStream):
         self._operations.extend(other._operations)
         return self
     
+    def append(self, operation:Operation):
+        """
+        Append an operation to the stream
+        """
+        self._operations.append(operation)
+        return self
+    
     def append_raw(self, code:str):
         """
         Append raw code to the stream
         """
+        # TODO we should parse this instead of cheating and using a string...
         self._operations.append(code)
         return self
     

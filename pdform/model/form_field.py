@@ -11,6 +11,11 @@ from .xobject import FormXObject
 
 
 class InputType(Enum):
+    """
+    This represents the field type as interpreted. These values are not found in the PDF spec; they 
+    are merely used as a convenience to avoid having to always check both the field type and field 
+    flags to determine the input type. See `Field.input_type`.
+    """
     text = 'text'
     textarea = 'textarea'
     password = 'password'
@@ -23,6 +28,12 @@ class InputType(Enum):
 
 
 class FieldFlags(IntFlag):
+    """
+    Represents the field flags values, as explained in the PDF spec sections 12.7.3.1 and 12.7.4. 
+    These flags help determine information about the nature of the field beyond those expressed by 
+    the broader field type. For example, to distinguish between a checkbox, radio button, or push
+    button.
+    """
     @classmethod
     def lookup(cls, value):
         if value is None:
@@ -57,6 +68,10 @@ class FieldFlags(IntFlag):
 
 
 class Field(Wrapper):
+    """
+    This wraps a form-field annotation dictionary and provides methods and properties to aid in 
+    interacting with that dictionary.
+    """
     raw:PdfDict
     rect = WrappedProperty(PdfName('Rect'), Rect)
     field_flags = WrappedProperty(PdfName('Ff'), FieldFlags.lookup, 0, True)
@@ -111,9 +126,40 @@ class Field(Wrapper):
                 return InputType.textarea
             else:
                 return InputType.text
+    
+    @property
+    def read_only(self):
+        return FieldFlags.ReadOnly in self.field_flags
+    @read_only.setter
+    def read_only(self, value):
+        if value:
+            self.field_flags |= FieldFlags.ReadOnly
+        else:
+            self.field_flags &= ~FieldFlags.ReadOnly
+
+    @property
+    def required(self):
+        return FieldFlags.Required in self.field_flags
+    @required.setter
+    def required(self, value):
+        if value:
+            self.field_flags |= FieldFlags.Required
+        else:
+            self.field_flags &= ~FieldFlags.Required
+
+    @property
+    def no_export(self):
+        return FieldFlags.NoExport in self.field_flags
+    @no_export.setter
+    def no_export(self, value):
+        if value:
+            self.field_flags |= FieldFlags.NoExport
+        else:
+            self.field_flags &= ~FieldFlags.NoExport
+
     @property
     def value(self):
-        return self.raw.V
+        return self.raw.inheritable.V
     @value.setter
     def value(self, value):
         input_type = self.input_type
@@ -127,6 +173,7 @@ class Field(Wrapper):
             return
         else:
             # Assume text field
+            # TODO there are also apparently rich text fields, which use an XHTML-like language for markup and are placed in /RV, see 12.7.3.4
             self._set_value_text(value)
 
     def _set_value_radiogroup(self, value):
@@ -225,6 +272,7 @@ def layout_form_text(pdf, text:str, da:str, rect:Rect, padding=1, line_spacing=1
         })
     )
     # Convert the DA to new text stream (see 12.7.3.3)
+    # FIXME weird spacing issue in Firefox (need set_word_spacing?)
     stream = (ContentStream()
         .begin_marked_content(PdfName('Tx')) # (I guess this makes text more extractable)
         .push_stack()

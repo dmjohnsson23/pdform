@@ -20,3 +20,5 @@ class FormXObject(Wrapper):
         )
         xobject.stream = str(stream)
         return cls(pdf, xobject)
+
+# TODO ImageXObject, base XObject
