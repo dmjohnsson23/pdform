@@ -6,6 +6,7 @@ import argparse
 import os, sys
 # allow importing self (why is this necessary?)
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from pdform.model import *
 from pdform.tools import *
 
 argp = argparse.ArgumentParser(
@@ -33,6 +34,27 @@ def cli_fill_form(args):
         output_path = sys.stdout.buffer
     PdfWriter().write(output_path, pdf)
 argp_fill_form.set_defaults(func=cli_fill_form)
+
+# pdform inspect-form
+argp_inspect_form = argp_sub.add_parser('inspect-form', help='Get a description of the fields in the given form')
+argp_inspect_form.add_argument('pdf', help="Path to the PDF you'd like to inspect for form fields")
+def cli_inspect_form(args):
+    from pdfrw import PdfReader
+    from json import dumps
+    pdf = PdfReader(args.pdf)
+    info = []
+    for field in iter_fields(pdf, pdf.Root.AcroForm.Fields):
+        field = Field(pdf, field)
+        info.append({
+            'qualified_name':field.qualified_name,
+            'label': field.raw.TU.to_unicode(),
+            'input_type': field.input_type.value,
+            'required': field.required,
+            'read_only': field.read_only,
+            'options': field.options
+        })
+    print(dumps(info, indent=4))
+argp_inspect_form.set_defaults(func=cli_inspect_form)
 
 
 

@@ -1,5 +1,5 @@
 from warnings import warn
-from pdfrw import PdfDict, PdfString, PdfName
+from pdfrw import PdfDict, PdfString, PdfName, PdfArray
 from pdfrw.objects.pdfname import BasePdfName
 from typing import Optional
 from enum import Enum, IntFlag
@@ -44,6 +44,8 @@ class FieldFlags(IntFlag):
             value = int(value)
         return cls(value)
     # Note: spec numbers bits starting with 1, so indexes below are off-by-one
+    # Values that get reused (make them first so all the other uses are aliases)
+    RadiosInUnison_or_RichText = 1 << 25
     # Table 221 – Field flags common to all field types
     ReadOnly = 1 << 0
     Required = 1 << 1
@@ -158,12 +160,43 @@ class Field(Wrapper):
             self.field_flags |= FieldFlags.NoExport
         else:
             self.field_flags &= ~FieldFlags.NoExport
+    
+
+    @property
+    def options(self)->list:
+        """
+        For radio buttons, checkboxes, or select fields, list all possible options.
+
+        Radio button and checkboxes will both return a list of PdfName objects corresponding to the
+        allowed states. Select fields will return a list that contains either PdfString objects,
+        representing the value, or a [export_value, display_value] pairs.
+        """
+        input_type = self.input_type
+        if input_type is InputType.radio:
+            group = self.raw
+            states = set()
+            if self.raw.Kids is None:
+                group = Field(self.raw.Parent)
+                if group.input_type is not InputType.radio:
+                    raise RuntimeError(f'Field {self.qualified_name} is a radio button not part of any group, or is a radio group with no buttons')
+            for kid in group.Kids:
+                states.update(kid.AP.N.keys())
+            return list(states)
+        elif input_type is InputType.checkbox:
+            return list(self.raw.AP.N.keys())
+        elif input_type is InputType.select or input_type is InputType.combo:
+            return list(tuple(opt) if isinstance(opt, PdfArray) else opt for opt in self.raw.Opt)
 
     @property
     def value(self):
+        """
+        The value of this field. When setting, appearance streams and other associated properties 
+        will also be set.
+        """
         return self.raw.inheritable.V
     @value.setter
     def value(self, value):
+        # Useful link: https://westhealth.github.io/exploring-fillable-forms-with-pdfrw.html
         input_type = self.input_type
         if input_type is InputType.radio:
             self._set_value_radiogroup(value)
@@ -173,9 +206,10 @@ class Field(Wrapper):
             # TODO we may be able to use this: https://pyhanko.readthedocs.io/en/latest/index.html
             warn('Signature fields are not supported; skipping')
             return
+        elif input_type is InputType.select or input_type is InputType.combo:
+            self._set_value_choice(value)
         else:
             # Assume text field
-            # TODO there are also apparently rich text fields, which use an XHTML-like language for markup and are placed in /RV, see 12.7.3.4
             self._set_value_text(value)
 
     def _set_value_radiogroup(self, value):
@@ -233,6 +267,37 @@ class Field(Wrapper):
             self.raw.update(PdfDict(AP = PdfDict(N = xobject.raw)))
         else:
             self.raw.AP.update(PdfDict(N = xobject.raw))
+        # If it's a rich text field, also set the rich value, which uses an XHTML-like language for 
+        # markup and are placed in /RV, see 12.7.3.4
+        # (We don't actually support the input of rich text right now, just the output)
+        # FIXME: This doesn't actually seem to make any visible difference whatsoever
+        if FieldFlags.RichText in self.field_flags:
+            ds = self.raw.DS.to_unicode().replace('"', '\\"')
+            xfa_api = {
+                '1.5': '2.0',
+                '1.6': '2.2',
+                '1.7': '2.4'
+            }.get(self.pdf.version, '2.4')
+            rich_value = (
+                '<?xml version="1.0"?>'
+                '<body xmlns="http://www.w3.org/1999/xhtml" '
+                'xmlns:xfa="http://www.xfa.org/schema/xfa-data/1.0/" '
+                'xfa:APIVersion="pdform:0.1.0" ' # Adobe uses "Acroform:2.7.0.0"
+                f'xfa:spec="{xfa_api}" '
+                '>'
+                f'<p style="{ds}">'+
+                f'</p><p style="{ds}">'.join(value.splitlines())+
+                '</p>'
+                '</body>'
+            )
+            self.raw.update(PdfDict(RV = PdfString.from_unicode(rich_value)))
+    
+
+    def _set_value_choice(self, value):
+        is_multi = FieldFlags.MultiSelect in self.field_flags
+        if is_multi and not isinstance(value, list):
+            value = [value]
+
 
 
 def layout_form_text(pdf, text:str, da:str, rect:Rect, padding=0, multiline=False, line_spacing=None):

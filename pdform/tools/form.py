@@ -19,7 +19,7 @@ def iter_fields(pdf, annots:Sequence[PdfDict]):
         if annot['/Subtype'] != '/Widget':
             # Not a widget. We'll still iterate Kids just in case any of them are.
             if '/Kids' in annot:
-                yield from iter_fields(annot.Kids)
+                yield from iter_fields(pdf, annot.Kids)
             continue
         field = Field(pdf, annot)
         input_type = field.input_type
@@ -35,7 +35,7 @@ def iter_fields(pdf, annots:Sequence[PdfDict]):
                 radios.add(field.qualified_name)
         elif '/Kids' in annot:
             # All other groups, yield the leaf nodes
-            yield from iter_fields(annot.Kids)
+            yield from iter_fields(pdf, annot.Kids)
         else:
             # Leaf node
             yield annot
