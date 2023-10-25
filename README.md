@@ -17,9 +17,27 @@ I've chosen to use pdfrw because:
 3. It's very low-level, which means you have to read the PDF spec to figure out how to use it...but honestly that's a good thing when using it as the base of another project.
 
 Current capabilities:
-* Populate form data (including working with checkboxes and radio buttons, and setting appearance streams without relying on the reader)
-* The ability to stamp images on a page (useful for non-cryptographic signatures)
-* Basic low-level interface for building content streams (which could be used to build higher-level interfaces)
+* Populate form data
+    - Supports checkboxes, including those with "checked" values other than "/Yes"
+    - Supports radio buttons
+    - Supports text fields, including multi-line text fields
+    - Generates appearance streams, without relying on the reader
+* The ability to stamp images on a page (useful for non-cryptographic signatures: as in literally just slapping a PNG image of a signature on the page)
+* Basic low-level interface for building content streams, which could be used to build higher-level interfaces (Currently used to generate appearance streams)
 * And, of course, anything you could already do with pdfrw
 
 No stand-alone documentation exists right now, but ``pdform -h`` will get you command-line help, and most of the functions and classes have descriptive docblocks. All references to the PDF specs within docblocks and comments are based on this version of the spec: <https://opensource.adobe.com/dc-acrobat-sdk-docs/pdfstandards/PDF32000_2008.pdf>
+
+## Other Options
+
+I don't *want* to create a new tool. I would love an existing tool that works for my use case. Here is where I explore others:
+
+* [PikePDF](https://pikepdf.readthedocs.io/en/latest/index.html): another low-level library like pdfrw, but with more features, and pretty good documentation.
+    - The base library already has `Pdf.generate_appearance_streams()`, which will reduce a lot of what we've been doing ourselves for form filling (we'll still need to actually do the filling ourselves, but PikePDF should be able to handle all the appearance stuff). Though there is this: <https://github.com/pikepdf/pikepdf/issues/58>
+    - The base library already implements content streams, though at a slightly lower level than we currently are.
+    - The base library has its own Rectangle class well.
+    - Overlay/underlay is naively supported, replacing our `stamp` function.
+    - Does not properly support checkboxes, but I submitted an issue to fix: <https://github.com/qpdf/qpdf/issues/1056>.
+    - Does not support multi-line text fields, newlines are ignored and nothing is wrapped. It is explicitly stated in the documentation that this is not supported.
+    - The underlying library (QPDF) has `QPDFFormFieldObjectHelper` and `QPDFAcroFormDocumentHelper`, which if exposed could be of use to us
+* [PyPDFium2](https://pypdfium2.readthedocs.io/en/stable/index.html)

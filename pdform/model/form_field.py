@@ -8,6 +8,8 @@ from .base import Wrapper, WrappedProperty
 from .rect import Rect
 from .content_stream import ContentStream
 from .xobject import FormXObject
+from .font import Font
+from ..utils.text import layout_text_line, layout_text_multiline
 
 
 class InputType(Enum):
@@ -226,15 +228,14 @@ class Field(Wrapper):
         if da is None:
             raise RuntimeError(f'Corrupted or Invalid PDF: Field {self.qualified_name} has no /DA')
         # Now build the appearance stream for the entered text
-        xobject = layout_form_text(self.pdf, value, da, self.rect)
+        xobject = layout_form_text(self.pdf, value, da, self.rect, multiline=FieldFlags.Multiline in self.field_flags)
         if '/AP' not in self.raw:
             self.raw.update(PdfDict(AP = PdfDict(N = xobject.raw)))
         else:
             self.raw.AP.update(PdfDict(N = xobject.raw))
 
 
-# TODO can we generalize this function more into a generic text layout function?
-def layout_form_text(pdf, text:str, da:str, rect:Rect, padding=1, line_spacing=1):
+def layout_form_text(pdf, text:str, da:str, rect:Rect, padding=0, multiline=False, line_spacing=None):
     """
     Lay out the given text in the given bounding box, returning a form XObject
 
@@ -263,38 +264,41 @@ def layout_form_text(pdf, text:str, da:str, rect:Rect, padding=1, line_spacing=1
     if font_family not in font_dict:
         raise RuntimeError(f'Cannot find font information for {font_family} (Available fonts: {", ".join(font_dict.keys())})')
     font_data = font_dict[font_family]
+    font = Font(pdf, font_data, font_family)
     # See 12.5.5 and in 8.10
     # Form Dictionary (Described in table 95)
     bbox = rect.to_bbox()
     resources = PdfDict(
         Font = PdfDict({
-            PdfName(font_family): font_data
+            font_family: font_data
         })
     )
     # Convert the DA to new text stream (see 12.7.3.3)
-    # FIXME weird spacing issue in Firefox (need set_word_spacing?)
     stream = (ContentStream()
         .begin_marked_content(PdfName('Tx')) # (I guess this makes text more extractable)
         .push_stack()
         .begin_text()
         .append_raw(da) # Include the default appearance
-    )
-    for lineno, line in enumerate(text.splitlines()):
         # TODO this is very naive and could probably be significantly improved
         # Refer to the following similar implementations for ideas:
         # * https://github.com/py-pdf/pypdf/blob/5c3550f66c5da530eb8853da91afe0f942afcbef/pypdf/_writer.py#L857
         # * https://github.com/mozilla/pdf.js/blob/2c87c4854a486d5cd0731b947dd622f8abe5e1b5/src/core/annotation.js#L2138
         # * https://github.com/fwenzel/pdftk/blob/a3db40d1a43207eaad558aa9591ef81403b51616/java/pdftk/com/lowagie/text/pdf/AcroFields.java#L407
-        if lineno == 0:
-            # Position the cursor at the top of the first line
-            stream.move_text(pad_x, bbox.top - pad_y - font_size)
-        else:
-            # Position the cursor at the start of the next line (offset from previous line)
-            # (I think we could use move_text_new_line or paint_text_line to simplify)
-            stream.move_text(0, -line_spacing * font_size) 
-        # Print the actual text
-        stream.paint_text(PdfString.from_unicode(line))
-    (stream
+        # * https://github.com/qpdf/qpdf/blob/81823f4032caefd1050bccb207d315839c1c48db/libqpdf/QPDFFormFieldObjectHelper.cc#L746
+        # FIXME:
+        # * Does not respect field-defined alignment and spacing
+        # * Weird spacing issue in Firefox (need set_word_spacing? Adobe looks like it just uses separate Td and Tj operations for each word.)
+        .extend(
+            layout_text_multiline(
+                pdf, text, bbox, font, font_size, 
+                include_set_font=False, padding=padding, leading=line_spacing
+            )
+            if multiline else 
+            layout_text_line(
+                pdf, text, bbox, font, font_size, 
+                include_set_font=False, padding=padding
+            )
+        )
         .end_text()
         .pop_stack()
         .end_marked_content()

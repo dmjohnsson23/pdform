@@ -77,5 +77,5 @@ def fill_form(pdf, data:dict):
         for stamp_data in data['.stamps']:
             if not stamp_data['img']:
                 continue
-            stamp(stamp_data['img'], pdf.pages[stamp_data['page']-1], Rect(stamp_data['rect']))
+            stamp(stamp_data['img'], pdf.pages[stamp_data['page']-1], Rect(pdf, stamp_data['rect']))
     #pdf.Root.AcroForm.update(PdfDict(NeedAppearances=PdfObject('true')))

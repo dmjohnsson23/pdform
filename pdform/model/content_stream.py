@@ -197,6 +197,12 @@ class ContentStream:
         # TODO we should parse this instead of cheating and using a string...
         self._operations.append(code)
         return self
+
+    def undo(self):
+        """
+        Remove the most recent operation from the stream
+        """
+        return self._operations.pop()
     
     def __str__(self):
         return ' '.join(map(str, self._operations))
