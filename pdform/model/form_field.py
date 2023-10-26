@@ -307,9 +307,10 @@ class Field(Wrapper):
     
 
     def _set_value_choice(self, value):
-        is_multi = FieldFlags.MultiSelect in self.field_flags
-        if is_multi and not isinstance(value, list):
-            value = [value]
+        if FieldFlags.MultiSelect in self.field_flags:
+            raise NotImplementedError('Multiselect not yet supported')
+            # TODO we should just have to set V to an array, but I'm not sure what to do for appearance
+        self._set_value_text(value)
 
 
 

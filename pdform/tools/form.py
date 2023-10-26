@@ -67,12 +67,12 @@ def fill_form(pdf, data:dict):
             if key and key in data and data[key] is not None:
                 if get_inheritable(annotation, Name.FT) == Name.Sig:
                     # Replace sig fields with stamps
-                    stamp(data[key], page, Rect(annotation.Rect))
+                    stamp(data[key], page, Rect(pdf, annotation.Rect))
                     to_delete.append(index)
                 else:
                     field.value = data[key]
         for index in reversed(to_delete):
-            page.Annots.pop(index)
+            del page.Annots[index]
     if '.stamps' in data:
         # Custom stamps not associated with fields
         for stamp_data in data['.stamps']:
