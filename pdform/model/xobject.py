@@ -1,24 +1,22 @@
 from .base import Wrapper
 from .rect import Rect
 from .content_stream import ContentStream
-from pdfrw import PdfDict, PdfName, PdfString, PdfArray
-import re
+from pikepdf import Dictionary, Array, Stream
 from typing import Union
 
 class FormXObject(Wrapper):
-    raw: PdfDict
+    raw: Dictionary
     @classmethod
-    def new(cls, pdf, bbox:Union[Rect,PdfArray], stream:Union[str,ContentStream], resources:PdfDict=None):
+    def new(cls, pdf, bbox:Union[Rect,Array], stream:Union[bytes,ContentStream], resources:Dictionary=None):
         if isinstance(bbox, Rect):
             bbox = bbox.raw
-        xobject = PdfDict(
+        xobject = Stream(pdf, bytes(stream), 
             Type = 'XObject',
             Subtype = 'Form',
             FormType = 1,
             BBox = bbox,
-            Resources = resources if resources is not None else PdfDict()
+            Resources = resources if resources is not None else Dictionary()
         )
-        xobject.stream = str(stream)
         return cls(pdf, xobject)
 
 # TODO ImageXObject, base XObject

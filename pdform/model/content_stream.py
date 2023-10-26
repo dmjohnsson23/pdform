@@ -1,7 +1,6 @@
 from __future__ import annotations
 from typing import Union,List
-from pdfrw import PdfArray,PdfDict,PdfName,PdfString
-from pdfrw.objects.pdfname import BasePdfName
+from pikepdf import Array,Dictionary,Name,String,Object
 from enum import Enum,IntEnum
 from dataclasses import dataclass
 
@@ -133,14 +132,22 @@ class Operation:
     Represents a operation in a PDF content stream. See 8.2 and 9.4.
     """
     operator:Operator
-    operands:List[Union[PdfArray,PdfDict,PdfName,PdfString,int,float]]
+    operands:List[Union[Array,Dictionary,Name,String,int,float]]
 
-    def __str__(self):
+    def __bytes__(self):
         if not self.operands:
-            return str(self.operator)
+            return str(self.operator).encode()
         else:
-            # TODO properly convert PdfArray and PdfDict to string
-            return f"{' '.join(map(str, self.operands))} {self.operator}"
+            code = bytearray()
+            # TODO use bytes
+            for operand in self.operands:
+                if isinstance(operand, Object):
+                    code.extend(operand.unparse())
+                else:
+                    code.extend(str(operand).encode())
+                code.extend(b' ')
+            code.extend(str(self.operator).encode())
+            return bytes(code)
 
 class ContentStream:
     """
@@ -174,7 +181,7 @@ class ContentStream:
     def __init__(self, operations:List[Operation]=None):
         self._operations = operations or []
 
-    def operation(self, operator:Union[str,Operator], *operands:Union[PdfArray,PdfDict,PdfName,PdfString,int,float]):
+    def operation(self, operator:Union[str,Operator], *operands:Union[Array,Dictionary,Name,String,int,float]):
         # Table 51 (under 8.2) lists possible operations
         self._operations.append(Operator(operator)(operands))
         return self
@@ -204,8 +211,8 @@ class ContentStream:
         """
         return self._operations.pop()
     
-    def __str__(self):
-        return ' '.join(map(str, self._operations))
+    def __bytes__(self):
+        return b' '.join(map(bytes, self._operations))
     # TODO PdfTokens could be used to split the string when parsing
 
     def set_line_width(self, width):
@@ -547,7 +554,7 @@ class ContentStream:
         self._operations.append(Operator.set_text_leading(leading))
         return self
 
-    def set_font(self, font:BasePdfName, size:Union[int,float]):
+    def set_font(self, font:Name, size:Union[int,float]):
         """
         Set the text font and the text font size. There is no initial value for either font or size;
         they shall be specified explicitly before any text is shown.
@@ -631,14 +638,14 @@ class ContentStream:
         self._operations.append(Operator.move_text_new_line())
         return self
 
-    def paint_text(self, string:PdfString):
+    def paint_text(self, string:String):
         """
         Show a text string.
         """
         self._operations.append(Operator.paint_text(string))
         return self
 
-    def paint_text_line(self, string:PdfString):
+    def paint_text_line(self, string:String):
         """
         Move to the next line and show a text string. This operator shall have the same effect as
         the code::
@@ -649,7 +656,7 @@ class ContentStream:
         self._operations.append(Operator.paint_text_line(string))
         return self
 
-    def paint_text_line_with_spacing(self, word_space:Union[int,float], character_space:Union[int,float], string:PdfString):
+    def paint_text_line_with_spacing(self, word_space:Union[int,float], character_space:Union[int,float], string:String):
         """
         Move to the next line and show a text string, using the given word spacing and character 
         spacing (setting the corresponding parameters in the text state). 
@@ -667,7 +674,7 @@ class ContentStream:
         self._operations.append(Operator.paint_text_line_with_spacing(word_space, character_space, string))
         return self
 
-    def paint_text_per_glyph(self, array:PdfArray):
+    def paint_text_per_glyph(self, array:Array):
         """
         Show one or more text strings, allowing individual glyph positioning. Each element of array
         shall be either a string or a number. If the element is a string, this operator shall show 
@@ -681,7 +688,7 @@ class ContentStream:
         self._operations.append(Operator.paint_text_per_glyph(array))
         return self
 
-    def set_stroke_color_space(self, name:BasePdfName):
+    def set_stroke_color_space(self, name:Name):
         """
         Set the current color space to use for stroking operations. The operand name shall be a 
         name object. If the color space is one that can be specified by a name and no additional 
@@ -712,7 +719,7 @@ class ContentStream:
         self._operations.append(Operator.set_stroke_color_space(name))
         return self
 
-    def set_nonstroke_color_space(self, name:BasePdfName):
+    def set_nonstroke_color_space(self, name:Name):
         """
         Set the current color space to use for non-stroking operations. The operand name shall be a 
         name object. If the color space is one that can be specified by a name and no additional 
@@ -869,7 +876,7 @@ class ContentStream:
         self._operations.append(Operator.set_nonstroke_color_cymk(c, y, m, k))
         return self
 
-    def paint_shading(self, name:BasePdfName):
+    def paint_shading(self, name:Name):
         """
         Paint the shape and color shading described by a shading dictionary, subject to the current 
         clipping path. The current color in the graphics state is neither used nor altered. The 
@@ -913,7 +920,7 @@ class ContentStream:
         self._operations.append(Operator.end_image())
         return self
 
-    def paint_xobject(self, name:BasePdfName):
+    def paint_xobject(self, name:Name):
         """
         Paint the specified XObject. The operand name shall appear as a key in the XObject 
         subdictionary of the current resource dictionary (see 7.8.3, "Resource Dictionaries"). The
@@ -925,7 +932,7 @@ class ContentStream:
         self._operations.append(Operator.paint_xobject(name))
         return self
 
-    def mark_point(self, tag:BasePdfName):
+    def mark_point(self, tag:Name):
         """
         Designate a marked-content point. 
         
@@ -934,7 +941,7 @@ class ContentStream:
         self._operations.append(Operator.mark_point(tag))
         return self
 
-    def mark_point_with_properties(self, tag:BasePdfName, properties:Union[PdfDict,BasePdfName]):
+    def mark_point_with_properties(self, tag:Name, properties:Union[Dictionary,Name]):
         """
         Designate a marked-content point with an associated property list.
         
@@ -946,7 +953,7 @@ class ContentStream:
         self._operations.append(Operator.mark_point_with_properties(tag, properties))
         return self
 
-    def begin_marked_content(self, tag:BasePdfName):
+    def begin_marked_content(self, tag:Name):
         """
         Begin a marked-content sequence, which must be terminated by calling 
         ``stream.end_marked_content()``
@@ -956,7 +963,7 @@ class ContentStream:
         self._operations.append(Operator.begin_marked_content(tag))
         return self
 
-    def begin_marked_content_properties(self, tag:BasePdfName, properties:Union[PdfDict,BasePdfName]):
+    def begin_marked_content_properties(self, tag:Name, properties:Union[Dictionary,Name]):
         """
         Begin a marked-content sequence with an associated property list, which must be terminated 
         by calling ``stream.end_marked_content()``

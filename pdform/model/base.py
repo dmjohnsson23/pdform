@@ -1,15 +1,17 @@
-from pdfrw import PdfArray, PdfDict
+from pikepdf import Array, Dictionary
 from typing import Union, Type
 from weakref import WeakValueDictionary
+from ..utils.dictionaries import get_inheritable
 
 class Wrapper:
     """
-    Base class for all the wrappers in this library, designed to wrap a PdfArray or PdfDict.
+    Base class for all the wrappers in this library, designed to wrap a `pikepdf.Array` or 
+    `pikepdf.Dictionary`.
     """
     _instances = WeakValueDictionary()
-    raw:Union[PdfDict,PdfArray]
-    pdf:PdfDict
-    def __new__(cls, pdf, raw:Union[PdfDict,PdfArray], *args, **kwargs):
+    raw:Union[Dictionary,Array]
+    pdf:Dictionary
+    def __new__(cls, pdf, raw:Union[Dictionary,Array], *args, **kwargs):
         addr = id(raw)
         instance = cls._instances.get(addr)
         if instance is None:
@@ -21,7 +23,7 @@ class Wrapper:
 
 
 class ArrayWrapper(Wrapper):
-    raw:PdfArray
+    raw:Array
     def __init__(self, pdf, raw, contained_type):
         self.contained_type = contained_type
         super().__init__(pdf, raw)
@@ -74,21 +76,18 @@ class WrappedProperty:
 
     def __get__(self, instance:Wrapper, owner):
         if self.inheritable:
-            raw = instance.raw.inheritable
+            to_wrap = get_inheritable(instance.raw, self.key)
+            if to_wrap is None:
+                return self.default
         else:
-            raw = instance.raw
-        try:
-            to_wrap = raw[self.key]
-        except KeyError:
-            return self.default
+            try:
+                to_wrap = instance.raw[self.key]
+            except KeyError:
+                return self.default
         return self._wrap(instance, to_wrap)
     
     def __set__(self, instance:Wrapper, value):
-        if self.inheritable:
-            raw = instance.raw.inheritable
-        else:
-            raw = instance.raw
-        raw[self.key] = self._unwrap(value)
+        instance.raw[self.key] = self._unwrap(value)
 
     def __delete__(self, instance):
         try:

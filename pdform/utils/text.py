@@ -1,7 +1,7 @@
 from ..model.rect import Rect
 from ..model.font import Font
 from ..model.content_stream import ContentStream
-from pdfrw import PdfString
+from pikepdf import String
 
 def layout_text_line(pdf, text, rect:Rect, font:Font, font_scale=1, include_set_font=True, include_set_spacing=True, include_clip_rect=True, padding=0, char_spacing=0, word_spacing=0):
     """
@@ -44,7 +44,7 @@ def layout_text_line(pdf, text, rect:Rect, font:Font, font_scale=1, include_set_
             stream.set_character_spacing(char_spacing)
     # Position the cursor for the first line
     stream.move_text(rect.left + pad_x, rect.top - pad_y - font_scale)
-    stream.paint_text(PdfString.from_unicode(text))
+    stream.paint_text(String(text))
     return stream
 
 
@@ -98,7 +98,7 @@ def layout_text_multiline(pdf, text, rect:Rect, font:Font, font_scale=1, include
     stream.move_text(rect.left + pad_x, rect.top - pad_y - font_scale)
     for paragraph in paragraphs:
         for line in paragraph:
-            stream.paint_text(PdfString.from_unicode(line))
+            stream.paint_text(String(line))
             # Position the cursor at the start of the next line (offset from previous line)
             # (I think we could use move_text_new_line or paint_text_line to simplify)
             stream.move_text(0, -leading - font_scale)

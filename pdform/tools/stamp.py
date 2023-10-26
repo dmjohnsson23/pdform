@@ -2,10 +2,10 @@ from ..model.rect import Rect
 from typing import Optional
 from io import BytesIO
 from PIL import Image
-from pdfrw import PdfReader, PageMerge
+from pikepdf import Pdf, Page
 
 
-def stamp(img, page, rect:Rect, transparent_background:Optional[bool]=None):
+def stamp(img, page:Page, rect:Rect, transparent_background:Optional[bool]=None):
     """
     Stamp an image on the page, fitting it in the box of the given rect.
 
@@ -21,42 +21,6 @@ def stamp(img, page, rect:Rect, transparent_background:Optional[bool]=None):
         path = BytesIO(b64decode(path))
     # Open image and convert to RGB (Greyscale images cause issues)
     img = Image.open(img).convert('RGB')
-    # Scale the image and add margins to perfectly match the destination
-    img_width, img_height = img.size
-    image_ratio = img_height / img_width
-    target_ratio = rect.height / rect.width
-    scale_factor = 1
-    margin_x = 0
-    margin_y = 0
-    if image_ratio > target_ratio: 
-        # Taller ratio than target
-        if img_height > rect.height:
-            # Scale down, and center horizontally
-            scale_factor = rect.height / img_height
-            margin_x = (rect.width - (img_width * scale_factor)) / 2
-        else:
-            # Center without scaling
-            margin_x = (rect.width - img_width) / 2
-            margin_y = (rect.height - img_height) / 2
-    elif image_ratio < target_ratio:
-        # Wider ratio than target
-        if img_width > rect.width:
-            # Scale down, and center vertically 
-            scale_factor = rect.width / img_width
-            margin_y = (rect.height - (img_height * scale_factor)) / 2
-        else:
-            # Center without scaling
-            margin_x = (rect.width - img_width) / 2
-            margin_y = (rect.height - img_height) / 2
-    else:
-        # Same ratio as target
-        if img_height > rect.height:
-            # Scale down
-            scale_factor = rect.height / img_height
-        else:
-            # Center without scaling
-            margin_x = (rect.width - img_width) / 2
-            margin_y = (rect.height - img_height) / 2
     # Remove a transparent background (as a solid color)
     if transparent_background:
         # FIXME
@@ -68,10 +32,5 @@ def stamp(img, page, rect:Rect, transparent_background:Optional[bool]=None):
     del img
     img_as_pdf.seek(0)
     # Overlay the PDF version of the image over the page
-    stamp_pdf = PdfReader(img_as_pdf)
-    merge = PageMerge(page).add(stamp_pdf.pages[0])
-    if scale_factor != 1:
-        merge[1].scale(scale_factor)
-    merge[1].x = rect.left#+margin_x
-    merge[1].y = rect.bottom+margin_y
-    merge.render()
+    stamp_pdf = Pdf.open(img_as_pdf)
+    page.add_overlay(stamp_pdf.pages[0], rect.helper)

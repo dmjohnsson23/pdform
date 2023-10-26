@@ -1,9 +1,9 @@
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from pdfrw import PdfReader, PdfWriter
+from pikepdf import Pdf
 from pdform import fill_form
 
-pdf = PdfReader(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'pdfs', 'VA9.pdf'))
+pdf = Pdf.open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'pdfs', 'VA9.pdf'))
 fill_form(pdf, {
     # ===== Page 1 ===== #
     # 1. NAME OF VETERAN (Last Name, First Name, Middle Initial)re you fill out this form.  V A also encourages you to get assistance from your representative in filling out this form.
@@ -60,4 +60,4 @@ fill_form(pdf, {
         }
     ]
 })
-PdfWriter().write(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'output', 'fill_form_VA9.pdf'), pdf)
+pdf.save(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'output', 'fill_form_VA9.pdf'))

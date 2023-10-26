@@ -1,7 +1,6 @@
 from .base import Wrapper
-from pdfrw import *
+from pikepdf import Dictionary, Name
 from enum import IntFlag, Enum
-from pdfrw.objects.pdfname import BasePdfName
 from typing import Union, List
 
 class FontFlags(IntFlag):
@@ -20,21 +19,21 @@ class FontFlags(IntFlag):
     SmallCap = 1 << 17
     ForceBold = 1 << 18
 
-class FontType(BasePdfName, Enum):
-    Type0='Type0'
-    Type1='Type1'
-    MMType1='MMType1'
-    Type3='Type3'
-    TrueType='TrueType'
-    CIDFontType0='CIDFontType0'
-    CIDFontType2='CIDFontType2'
+class FontType:
+    Type0=Name.Type0
+    Type1=Name.Type1
+    MMType1=Name.MMType1
+    Type3=Name.Type3
+    TrueType=Name.TrueType
+    CIDFontType0=Name.CIDFontType0
+    CIDFontType2=Name.CIDFontType2
 
 class Font(Wrapper):
     """
     * 9.6: Simple Fonts
     * 9.8: Font Descriptors
     """
-    raw:PdfDict
+    raw:Dictionary
 
     def __init__(self, pdf, raw, name) -> None:
         self.name = name
@@ -54,7 +53,10 @@ class Font(Wrapper):
 
     @property
     def leading(self)->Union[int,float]:
-        return self.raw.FontDescriptor.Leading or 0
+        if Name.Leading in self.raw.FontDescriptor:
+            return self.raw.FontDescriptor.Leading
+        else:
+            return 0
     @leading.setter
     def leading(self, value:Union[int,float]):
         self.raw.FontDescriptor.Leading = value
@@ -72,12 +74,12 @@ class Font(Wrapper):
         char_code = ord(char) - int(self.raw.FirstChar)
         if len(self.raw.Widths) > char_code:
             width = float(self.raw.Widths[char_code])
-        elif PdfName('MissingWidth') in self.raw.FontDescriptor:
+        elif Name.MissingWidth in self.raw.FontDescriptor:
             width = float(self.raw.FontDescriptor.MissingWidth)
         # TODO These remaining fallback I'm not 100% sure are in the right order...or that they should be here at all. Could also use FontBBox
-        elif PdfName('AvgWidth') in self.raw.FontDescriptor:
+        elif Name.AvgWidth in self.raw.FontDescriptor:
             width = float(self.raw.FontDescriptor.AvgWidth)
-        elif PdfName('MaxWidth') in self.raw.FontDescriptor:
+        elif Name.MaxWidth in self.raw.FontDescriptor:
             width = float(self.raw.FontDescriptor.MaxWidth)
         else:
             width = 0

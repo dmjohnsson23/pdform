@@ -1,7 +1,6 @@
 from warnings import warn
-from pdfrw import PdfDict, PdfString, PdfName, PdfArray
-from pdfrw.objects.pdfname import BasePdfName
-from typing import Optional
+from pikepdf import Dictionary, String, Name, Array
+from typing import Optional, Union
 from enum import Enum, IntFlag
 import re
 from .base import Wrapper, WrappedProperty
@@ -10,6 +9,7 @@ from .content_stream import ContentStream
 from .xobject import FormXObject
 from .font import Font
 from ..utils.text import layout_text_line, layout_text_multiline
+from ..utils.dictionaries import get_inheritable
 
 
 class InputType(Enum):
@@ -76,9 +76,9 @@ class Field(Wrapper):
     This wraps a form-field annotation dictionary and provides methods and properties to aid in 
     interacting with that dictionary.
     """
-    raw:PdfDict
-    rect = WrappedProperty(PdfName('Rect'), Rect)
-    field_flags = WrappedProperty(PdfName('Ff'), FieldFlags.lookup, 0, True)
+    raw:Dictionary
+    rect = WrappedProperty(Name.Rect, Rect)
+    field_flags = WrappedProperty(Name.Ff, FieldFlags.lookup, FieldFlags(0), True)
     @property
     def qualified_name(self) -> Optional[str]:
         """
@@ -88,7 +88,7 @@ class Field(Wrapper):
         return self.get_qualified_field_name(self.raw)
 
     @classmethod
-    def get_qualified_field_name(cls, field: PdfDict) -> Optional[str]:
+    def get_qualified_field_name(cls, field: Dictionary) -> Optional[str]:
         """
         Helper function to calculate :py:attr:`qualified_name`.
         """
@@ -98,9 +98,9 @@ class Field(Wrapper):
         elif "/T" not in field:
             return None
         elif "/Parent" in field:
-            return f"{cls.get_qualified_field_name(field.Parent)}.{field.T.to_unicode()}"
+            return f"{cls.get_qualified_field_name(field.Parent)}.{field.T}"
         else:
-            return field.T.to_unicode()
+            return str(field.T)
     
     @property
     def input_type(self) -> Optional[InputType]:
@@ -108,7 +108,7 @@ class Field(Wrapper):
         Get the type of input this field represents
         """
         flags = self.field_flags
-        field_type = self.raw.inheritable.FT
+        field_type = get_inheritable(self.raw, Name.FT)
         if field_type == '/Sig':
             return InputType.signature
         elif field_type == '/Btn':
@@ -167,8 +167,8 @@ class Field(Wrapper):
         """
         For radio buttons, checkboxes, or select fields, list all possible options.
 
-        Radio button and checkboxes will both return a list of PdfName objects corresponding to the
-        allowed states. Select fields will return a list that contains either PdfString objects,
+        Radio button and checkboxes will both return a list of Name objects corresponding to the
+        allowed states. Select fields will return a list that contains either String objects,
         representing the value, or a [export_value, display_value] pairs.
         """
         input_type = self.input_type
@@ -185,7 +185,7 @@ class Field(Wrapper):
         elif input_type is InputType.checkbox:
             return list(self.raw.AP.N.keys())
         elif input_type is InputType.select or input_type is InputType.combo:
-            return list(tuple(opt) if isinstance(opt, PdfArray) else opt for opt in self.raw.Opt)
+            return list((str(opt[0]), str(opt[1])) if isinstance(opt, Array) else opt for opt in self.raw.Opt)
 
     @property
     def value(self):
@@ -193,7 +193,7 @@ class Field(Wrapper):
         The value of this field. When setting, appearance streams and other associated properties 
         will also be set.
         """
-        return self.raw.inheritable.V
+        return get_inheritable(self.raw, Name.V)
     @value.setter
     def value(self, value):
         # Useful link: https://westhealth.github.io/exploring-fillable-forms-with-pdfrw.html
@@ -213,49 +213,62 @@ class Field(Wrapper):
             self._set_value_text(value)
 
     def _set_value_radiogroup(self, value):
-        if not isinstance(value, BasePdfName):
-            value = PdfName(str(value))
+        if not isinstance(value, Name):
+            value = str(value)
+            if value[0] != '/':
+                value = f"/{value}"
+            value = Name(value)
         group = self.raw
-        off = PdfName('Off')
+        off = Name.Off
         if self.raw.Kids is None:
             group = Field(self.raw.Parent)
             if group.input_type is not InputType.radio:
                 raise RuntimeError(f'Field {self.qualified_name} is a radio button not part of any group, or is a radio group with no buttons')
         for kid in group.Kids:
             # Set appearance streams for children (individual radio buttons)
-            states = set(kid['/AP']['/N'].keys())
+            states = set(kid.AP.N.keys())
             states.discard(off)
             if value in states:
-                kid.update(PdfDict(AS=value))
+                kid.AS=value
             elif '/AS' in kid:
-                kid.update(PdfDict(AS=off))
+                kid.AS=off
         # Set value for parent (radio group)
-        group.update(PdfDict(V=value))
+        group.V=value
 
     def _set_value_checkbox(self, value):
-        off = PdfName('Off')
-        states = set(self.raw['/AP']['/N'].keys())
+        off = Name.Off
+        states = set(self.raw.AP.N.keys())
+        if isinstance(value, (str,bytes,Name)) and value in states:
+            if not isinstance(value, Name):
+                value = Name(value)
+            self.raw.V = value
+            self.raw.AS = value
+            return
         states.discard(off)
-        on = states.pop()
+        on = Name(states.pop())
         # Set/Delete both value and appearance stream
-        if value:
-            self.raw.update(PdfDict(V=on, AS=on))
+        if value is True:
+            self.raw.V=on
+            self.raw.AS=on
+        elif value is False or value is None:
+            self.raw.V=off
+            self.raw.AS=off
         else:
-            self.raw.update(PdfDict(V=off, AS=off))
+            raise ValueError(f'Invalid checkbox value: {repr(value)}')
     
     def _set_value_text(self, value):
-        if isinstance(value, PdfString):
-            self.raw.update(PdfDict(V=value))
-            value = value.to_unicode()
+        if isinstance(value, String):
+            self.raw.V=value
+            value = str(value)
         else:
             value = str(value)
-            self.raw.update(PdfDict(V=PdfString.from_unicode(value)))
+            self.raw.V=String(value)
         # We also need to set the normal appearance stream ['/AP']['/N'] to match the text.
         # (In theory, we could just set the "NeedAppearances" flag on `pdf.Root.AcroForm` and 
         # let the reader figure this out for us, but in practice not all readers will...)
         #
         # First get the default appearance, either from the parent chain or the root AcroForm
-        da = self.raw.inheritable.DA
+        da = get_inheritable(self.raw, Name.DA)
         if da is None:
             da = self.pdf.Root.AcroForm.get('/DA')
         # All spec-compliant PDFs should have DA in one of those two places, so fail if not
@@ -264,20 +277,20 @@ class Field(Wrapper):
         # Now build the appearance stream for the entered text
         xobject = layout_form_text(self.pdf, value, da, self.rect, multiline=FieldFlags.Multiline in self.field_flags)
         if '/AP' not in self.raw:
-            self.raw.update(PdfDict(AP = PdfDict(N = xobject.raw)))
+            self.raw.AP = Dictionary(N = xobject.raw)
         else:
-            self.raw.AP.update(PdfDict(N = xobject.raw))
+            self.raw.AP.N = xobject.raw
         # If it's a rich text field, also set the rich value, which uses an XHTML-like language for 
         # markup and are placed in /RV, see 12.7.3.4
         # (We don't actually support the input of rich text right now, just the output)
         # FIXME: This doesn't actually seem to make any visible difference whatsoever
         if FieldFlags.RichText in self.field_flags:
-            ds = self.raw.DS.to_unicode().replace('"', '\\"')
+            ds = str(self.raw.DS).replace('"', '\\"')
             xfa_api = {
                 '1.5': '2.0',
                 '1.6': '2.2',
                 '1.7': '2.4'
-            }.get(self.pdf.version, '2.4')
+            }.get(self.pdf.pdf_version, '2.4')
             rich_value = (
                 '<?xml version="1.0"?>'
                 '<body xmlns="http://www.w3.org/1999/xhtml" '
@@ -290,7 +303,7 @@ class Field(Wrapper):
                 '</p>'
                 '</body>'
             )
-            self.raw.update(PdfDict(RV = PdfString.from_unicode(rich_value)))
+            self.raw.RV = String(rich_value)
     
 
     def _set_value_choice(self, value):
@@ -300,7 +313,7 @@ class Field(Wrapper):
 
 
 
-def layout_form_text(pdf, text:str, da:str, rect:Rect, padding=0, multiline=False, line_spacing=None):
+def layout_form_text(pdf, text:str, da:Union[String,bytes], rect:Rect, padding=0, multiline=False, line_spacing=None):
     """
     Lay out the given text in the given bounding box, returning a form XObject
 
@@ -309,19 +322,15 @@ def layout_form_text(pdf, text:str, da:str, rect:Rect, padding=0, multiline=Fals
     :param da: The /DA attribute of the field
     :param rect: The /Rect attribute of the field
     """
-    if isinstance(padding, tuple) and len(padding) == 2:
-        pad_x, pad_y = padding
-    else:
-        pad_x = pad_y = padding
-    if isinstance(da, PdfString):
-        da = da.to_unicode()
+    if isinstance(da, String):
+        da = bytes(da)
     # Extract font information from DA
     # The DA will be something like this, defining font and scale factor for the text object:
     # /CourierNewPSMT 10.00 Tf 0 g
-    match = re.search('\/([!-~]+)\s+(\d+(?:\.\d+))\s*Tf', da)
+    match = re.search(b'(\/[!-~]+)\s+(\d+(?:\.\d+))\s*Tf', da)
     if not match:
         raise ValueError(f'Invalid or missing /DA (contains no valid Tf operator): {repr(da)}')
-    font_family = PdfName(match[1])
+    font_family = Name(match[1].decode())
     font_size = float(match[2])
     # Lookup the font info in the main font dict 
     # TODO technically this data could also be stored in field.inheritable.DR
@@ -333,14 +342,12 @@ def layout_form_text(pdf, text:str, da:str, rect:Rect, padding=0, multiline=Fals
     # See 12.5.5 and in 8.10
     # Form Dictionary (Described in table 95)
     bbox = rect.to_bbox()
-    resources = PdfDict(
-        Font = PdfDict({
-            font_family: font_data
-        })
-    )
+    fdict = Dictionary()
+    fdict[font_family] = font_data
+    resources = Dictionary(Font = fdict)
     # Convert the DA to new text stream (see 12.7.3.3)
     stream = (ContentStream()
-        .begin_marked_content(PdfName('Tx')) # (I guess this makes text more extractable)
+        .begin_marked_content(Name.Tx) # (I guess this makes text more extractable)
         .push_stack()
         .begin_text()
         .append_raw(da) # Include the default appearance

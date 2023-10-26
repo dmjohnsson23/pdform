@@ -1,10 +1,11 @@
-from pdfrw import PdfDict
+from pikepdf import Dictionary, Name
 from typing import Sequence
 from ..model.form_field import Field, InputType
 from ..model.rect import Rect
 from .stamp import stamp
+from ..utils.dictionaries import get_inheritable
 
-def iter_fields(pdf, annots:Sequence[PdfDict]):
+def iter_fields(pdf, annots:Sequence[Dictionary]):
     """
     Iterator over a set of fields. For radio buttons, yield the parent. For all others, yield the leaf node.
 
@@ -16,15 +17,15 @@ def iter_fields(pdf, annots:Sequence[PdfDict]):
     """
     radios = set()
     for annot in annots:
-        if annot['/Subtype'] != '/Widget':
+        if Name.Subtype not in annot or annot.Subtype != Name.Widget:
             # Not a widget. We'll still iterate Kids just in case any of them are.
-            if '/Kids' in annot:
+            if Name.Kids in annot:
                 yield from iter_fields(pdf, annot.Kids)
             continue
         field = Field(pdf, annot)
         input_type = field.input_type
         if input_type is InputType.radio:
-            if '/Kids' in annot:
+            if Name.Kids in annot:
                 # Radio group
                 yield annot
             else:
@@ -33,7 +34,7 @@ def iter_fields(pdf, annots:Sequence[PdfDict]):
                     continue # We already did this one
                 yield annot.Parent
                 radios.add(field.qualified_name)
-        elif '/Kids' in annot:
+        elif Name.Kids in annot:
             # All other groups, yield the leaf nodes
             yield from iter_fields(pdf, annot.Kids)
         else:
@@ -56,26 +57,25 @@ def fill_form(pdf, data:dict):
           cryptographic signatures are not supported)
     """
     for page in pdf.pages:
-        annotations = page['/Annots']
-        if annotations is None:
+        if Name.Annots not in page:
             continue
+        annotations = page[Name.Annots]
         to_delete = []
         for index, annotation in enumerate(iter_fields(pdf, annotations)):
             field = Field(pdf, annotation)
             key = field.qualified_name
             if key and key in data and data[key] is not None:
-                if annotation.inheritable.FT == '/Sig':
+                if get_inheritable(annotation, Name.FT) == Name.Sig:
                     # Replace sig fields with stamps
                     stamp(data[key], page, Rect(annotation.Rect))
                     to_delete.append(index)
                 else:
                     field.value = data[key]
         for index in reversed(to_delete):
-            page['/Annots'].pop(index)
+            page.Annots.pop(index)
     if '.stamps' in data:
         # Custom stamps not associated with fields
         for stamp_data in data['.stamps']:
             if not stamp_data['img']:
                 continue
-            stamp(stamp_data['img'], pdf.pages[stamp_data['page']-1], Rect(pdf, stamp_data['rect']))
-    #pdf.Root.AcroForm.update(PdfDict(NeedAppearances=PdfObject('true')))
+            stamp(stamp_data['img'], pdf.pages[stamp_data['page']-1], Rect.new(pdf, *stamp_data['rect']))
