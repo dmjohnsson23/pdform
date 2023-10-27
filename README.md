@@ -19,7 +19,20 @@ Current capabilities:
 
 No stand-alone documentation exists right now, but ``pdform -h`` will get you command-line help, and most of the functions and classes have descriptive docblocks. All references to the PDF specs within docblocks and comments are based on this version of the spec: <https://opensource.adobe.com/dc-acrobat-sdk-docs/pdfstandards/PDF32000_2008.pdf>
 
-## TODOs
+## Example
+
+CLI Usage
+```shell
+# Outputs a JSON-formatted string showing details about all form fields
+python3 -m pdform inspect-form path/to/form.pdf
+
+# Create a filled version of the form
+python3 -m pdform fill-form path/to/form.pdf '{"field1":"value1","checkbox":True,"signature":"path/to/dig_img.png"}' path/to/output.pdf
+```
+
+See the examples folder for Python library usage.
+
+## TODOs/Wishlist
 
 * PikePDF already has a `Pdf.generate_appearance_streams()` method, which we could use in place of a lot of the work we are doing. However, this method has some issues that would need to be fixed before we could use it:
     - Does not properly support checkboxes, but I submitted an issue to fix: <https://github.com/qpdf/qpdf/issues/1056>.
@@ -32,7 +45,7 @@ No stand-alone documentation exists right now, but ``pdform -h`` will get you co
 
 "But don't such tools already exist? Why roll your own?"
 
-Well, you'd certainly *think* that would be the case, wouldn't you. I don't *want* to create a new tool. I would love an existing tool that works for my use case. Just haven't found one
+You'd think so, but I haven't found one.
 
 I've chosen to use pikepdf because:
 1. It both reads and writes PDFs. Other tools often only read (e.g. pdfminer) or only write (pydyf, reportlab).
