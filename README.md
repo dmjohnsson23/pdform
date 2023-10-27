@@ -27,7 +27,7 @@ CLI Usage
 python3 -m pdform inspect-form path/to/form.pdf
 
 # Create a filled version of the form
-python3 -m pdform fill-form path/to/form.pdf '{"field1":"value1","checkbox":True,"signature":"path/to/dig_img.png"}' path/to/output.pdf
+python3 -m pdform fill-form path/to/form.pdf '{"field1":"value1","checkbox":True,"signature":"path/to/sig_img.png"}' path/to/output.pdf
 ```
 
 See the examples folder for Python library usage.
