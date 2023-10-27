@@ -197,6 +197,8 @@ class Field(Wrapper):
     @value.setter
     def value(self, value):
         # Useful link: https://westhealth.github.io/exploring-fillable-forms-with-pdfrw.html
+        # Note: The above link incorrectly conflates listbox/combobox with uniselect/multiselect
+        # Actually, listbox = dropdown select, combobox = text input with dropdown suggestions
         input_type = self.input_type
         if input_type is InputType.radio:
             self._set_value_radiogroup(value)
@@ -310,6 +312,7 @@ class Field(Wrapper):
         if FieldFlags.MultiSelect in self.field_flags:
             raise NotImplementedError('Multiselect not yet supported')
             # TODO we should just have to set V to an array, but I'm not sure what to do for appearance
+        self.field_flags |= FieldFlags.Combo # Hacky workaround since we aren't validating options right now
         self._set_value_text(value)
 
 
