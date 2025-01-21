@@ -1,6 +1,7 @@
 from __future__ import annotations
 from typing import Union,List
-from pikepdf import Array,Dictionary,Name,String,Object
+from pikepdf import Array,Dictionary,Name,String,Object,ContentStreamInstruction,unparse_content_stream,parse_content_stream
+from pikepdf import Operator as _Operator, Stream as _Stream, Pdf, Page
 from enum import Enum,IntEnum
 from dataclasses import dataclass
 
@@ -12,10 +13,10 @@ class Operator(str, Enum): # We can just use StrEnum in Python 3.11
     Operators are callable, and doing so will return an operation. Thus, all the following are 
     equivalent::
 
-        Operation(Operator.move, x, y)
+        pikepdf.ContentStreamInstruction((x, y), Operator.move)
         Operator.move(x, y)
         Operator('m')(x, y)
-        Operation(Operator('m'), x, y)
+        pikepdf.ContentStreamInstruction((x, y), Operator('m'))
     """
     # General graphics state (Table 57)
     set_line_width='w'
@@ -106,8 +107,11 @@ class Operator(str, Enum): # We can just use StrEnum in Python 3.11
     begin_compatibility='BX'
     end_compatibility='EX' 
 
-    def __call__(self, *operands):
-        return Operation(self, operands)
+    def __call__(self, *operands)->ContentStreamInstruction:
+        """
+        Return the operation for this operator with the given parameters
+        """
+        return ContentStreamInstruction(operands, _Operator(self))
     
     def __str__(self):
         return self.value
@@ -125,29 +129,6 @@ class TextRenderMode(IntEnum):
     fill_stroke_and_clip=6
     clip=7
 
-
-@dataclass
-class Operation:
-    """
-    Represents a operation in a PDF content stream. See 8.2 and 9.4.
-    """
-    operator:Operator
-    operands:List[Union[Array,Dictionary,Name,String,int,float]]
-
-    def __bytes__(self):
-        if not self.operands:
-            return str(self.operator).encode()
-        else:
-            code = bytearray()
-            # TODO use bytes
-            for operand in self.operands:
-                if isinstance(operand, Object):
-                    code.extend(operand.unparse())
-                else:
-                    code.extend(str(operand).encode())
-                code.extend(b' ')
-            code.extend(str(self.operator).encode())
-            return bytes(code)
 
 class ContentStream:
     """
@@ -171,15 +152,27 @@ class ContentStream:
         stream.operation('m', x, y)
         stream.append(Operator.move(x, y))
         stream.append(Operator('m')(x, y))
-        stream.append(Operation(Operator.move, x, y))
-        stream.append(Operation(Operator('m'), x, y))
+        stream.append(pikepdf.ContentStreamInstruction((x, y), Operator.move))
+        stream.append(pikepdf.ContentStreamInstruction((x, y), Operator('m')))
         stream.append_raw(f"{x} {y} m")
         stream.move(x, y)
     """
     # Basically the same concept: https://doc.courtbouillon.org/pydyf/stable/api_reference.html#pydyf.Stream 
     # See also: https://github.com/Kozea/WeasyPrint/blob/main/weasyprint/pdf/stream.py
-    def __init__(self, operations:List[Operation]=None):
+    def __init__(self, operations:List[ContentStreamInstruction]=None):
         self._operations = operations or []
+
+    @classmethod    
+    def parse(cls, code:Union[str,bytes]):
+        if (isinstance(code, str)):
+            code = code.encode()
+        pdf = Pdf.new()
+        stream = _Stream(pdf, code)
+        return cls(parse_content_stream(stream))
+    
+    @classmethod
+    def parse_object(cls, object:Union[Object,Page]):
+        return cls(parse_content_stream(object))
 
     def operation(self, operator:Union[str,Operator], *operands:Union[Array,Dictionary,Name,String,int,float]):
         # Table 51 (under 8.2) lists possible operations
@@ -190,19 +183,22 @@ class ContentStream:
         self._operations.extend(other._operations)
         return self
     
-    def append(self, operation:Operation):
+    def append(self, operation:ContentStreamInstruction):
         """
         Append an operation to the stream
         """
         self._operations.append(operation)
         return self
     
-    def append_raw(self, code:str):
+    def append_raw(self, code:Union[str,bytes]):
         """
         Append raw code to the stream
         """
-        # TODO we should parse this instead of cheating and using a string...
-        self._operations.append(code)
+        if (isinstance(code, str)):
+            code = code.encode()
+        pdf = Pdf.new()
+        stream = _Stream(pdf, code)
+        self._operations.extend(parse_content_stream(stream))
         return self
 
     def undo(self):
@@ -212,8 +208,7 @@ class ContentStream:
         return self._operations.pop()
     
     def __bytes__(self):
-        return b' '.join(map(bytes, self._operations))
-    # TODO PdfTokens could be used to split the string when parsing
+        return unparse_content_stream(self._operations)
 
     def set_line_width(self, width):
         """

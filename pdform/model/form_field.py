@@ -198,7 +198,8 @@ class Field(Wrapper):
     def value(self, value):
         # Useful link: https://westhealth.github.io/exploring-fillable-forms-with-pdfrw.html
         # Note: The above link incorrectly conflates listbox/combobox with uniselect/multiselect
-        # Actually, listbox = dropdown select, combobox = text input with dropdown suggestions
+        # Actually, listbox = list select, combobox = dropdown select. 
+        # Multiselect is controlled by `FieldFlags.MultiSelect`
         input_type = self.input_type
         if input_type is InputType.radio:
             self._set_value_radiogroup(value)
@@ -343,6 +344,7 @@ def layout_form_text(pdf, text:str, da:Union[String,bytes], rect:Rect, padding=0
         raise RuntimeError(f'Cannot find font information for {font_family} (Available fonts: {", ".join(font_dict.keys())})')
     font_data = font_dict[font_family]
     font = Font(pdf, font_data, font_family)
+    space_size = font.get_char_width(' ', font_size)
     # See 12.5.5 and in 8.10
     # Form Dictionary (Described in table 95)
     bbox = rect.to_bbox()
@@ -367,12 +369,12 @@ def layout_form_text(pdf, text:str, da:Union[String,bytes], rect:Rect, padding=0
         .extend(
             layout_text_multiline(
                 pdf, text, bbox, font, font_size, 
-                include_set_font=False, padding=padding, leading=line_spacing
+                include_set_font=False, padding=padding, leading=line_spacing, word_spacing=space_size
             )
             if multiline else 
             layout_text_line(
                 pdf, text, bbox, font, font_size, 
-                include_set_font=False, padding=padding
+                include_set_font=False, padding=padding, word_spacing=space_size
             )
         )
         .end_text()

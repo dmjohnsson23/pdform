@@ -40,6 +40,7 @@ See the examples folder for Python library usage.
 * PikePdf already has classes for streams and stream operations that could replace ours, though they are slightly lower level than ours.
 * PikePdf already has a Rectangle class that could replace our `Rect` class.
 * The underlying library (QPDF) has `QPDFFormFieldObjectHelper` and `QPDFAcroFormDocumentHelper`, which if exposed could be of use to us for `Field`
+* The Form 9 example has validation on the phone number fields when viewed in Adobe Reader. I'm honestly not sure how that works, but I'd like to be able to have functionality to disable it.
 
 ## Other Options Explored
 
