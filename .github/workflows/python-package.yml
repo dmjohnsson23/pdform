@@ -30,7 +30,7 @@ jobs:
         python -m pip install poetry
     - name: Build wheel
       run: |
-        python -m poetry build --clean
+        python -m poetry build
     - name: Upload wheel
       uses: actions/upload-artifact@v4
       with:
