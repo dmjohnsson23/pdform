@@ -30,10 +30,10 @@ jobs:
         python -m pip install poetry
     - name: Build wheel
       run: |
-        python -m poetry build
+        python -m poetry build --clean
     - name: Upload wheel
       uses: actions/upload-artifact@v4
       with:
-        name: release-dists
+        name: release-dists-${{ matrix.python-version }}
         path: dist/
 
