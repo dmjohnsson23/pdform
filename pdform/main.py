@@ -49,7 +49,8 @@ def cli_inspect_form(args):
             'input_type': field.input_type.value,
             'required': field.required,
             'read_only': field.read_only,
-            'options': field.options
+            'options': field.options,
+            'rect': [float(coord) for coord in field.rect.raw] if field.rect is not None else None,
         })
     print(dumps(info, indent=4))
 argp_inspect_form.set_defaults(func=cli_inspect_form)
