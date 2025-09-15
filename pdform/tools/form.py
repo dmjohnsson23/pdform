@@ -11,7 +11,7 @@ def iter_fields(pdf, annots:Sequence[Dictionary]):
 
     :param annots: The annotations or fields to iterate over, can be:
 
-        * ``pdf.Root.Acroform.Fields``
+        * ``pdf.Root.AcroForm.Fields``
         * ``page.Annots``
         * ``field.Kids``
     """

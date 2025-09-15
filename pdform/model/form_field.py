@@ -124,7 +124,7 @@ class Field(Wrapper):
             else:
                 return InputType.select
         elif field_type == '/Tx':
-            if FieldFlags.Pushbutton in flags:
+            if FieldFlags.Password in flags:
                 return InputType.password
             elif FieldFlags.Multiline in flags:
                 return InputType.textarea

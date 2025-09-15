@@ -93,7 +93,7 @@ The command expects JSON data similar to the following:
 
     {
         "VA9[0].#subform[0].TextField1[0]": "Bob Smith",
-        "VA9[0].#subform[0].JF01[0]": True,
+        "VA9[0].#subform[0].JF01[0]": true,
         "VA9[0].#subform[0].RadioButtonList[0]": "/3",
         "F[0].#subform[13].Digital_Signature[1]": "/path/to/signature.png"
     }
@@ -131,8 +131,8 @@ If your form contains space for a signature, but does not actually use a real si
 The stamps array contains objects with the following properties:
 
 * ``img``: The path to the image to stamp.
-* ``page``: The page number the stamp should be applied to (pages start at 1).
-* ``rect``: The on-screen rectangle coodinates where the image should be stamped, expressed as ``[left, bottom, right, top]``. 
+* ``page``: The page number the stamp should be applied to. Pages start at 1.
+* ``rect``: The on-screen rectangle coodinates where the image should be stamped, expressed as ``[left, bottom, right, top]``. Members can be ints, floats, or numeric strings.
 
 .. tip::
 

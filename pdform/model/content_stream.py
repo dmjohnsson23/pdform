@@ -646,7 +646,7 @@ class ContentStream:
         the code::
 
             stream.move_text_new_line()
-            stream.pain_text(string)
+            stream.paint_text(string)
         """
         self._operations.append(Operator.paint_text_line(string))
         return self
