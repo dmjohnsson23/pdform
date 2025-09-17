@@ -1,5 +1,7 @@
 # PDForm
 
+*Some of the functionality that was implemented by this tool has been [merged upstream](https://github.com/pikepdf/pikepdf/pull/649) into PikePdf. As such, I've [re-written this tool](https://github.com/dmjohnsson23/pdform-pikpdf) using PikePdf's newer, cleaner interface. This version of the tool is archived.*
+
 This is a wrapper around the [pikepdf](https://pypi.org/project/pikepdf/) library with two primary design goals:
 
 1. Expose the structure of the PDF using logically-named properties, classes, and methods; instead of requiring you to read the PDF spec to learn the "raw" PDF structure with all its cryptic abbreviations
