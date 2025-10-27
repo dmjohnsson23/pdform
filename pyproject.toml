@@ -14,4 +14,4 @@ requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
 
 [tool.poetry.scripts]
-pdform = "main:main"
+pdform = "pdform.main:main"
